@@ -1,0 +1,36 @@
+{
+  "name": "highlight-ai",
+  "version": "1.0.0",
+  "description": "AI-powered context menu for selected text on macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "check-setup": "node check-setup.js"
+  },
+  "keywords": [
+    "electron",
+    "ai",
+    "macos",
+    "context-menu"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.highlightai.app",
+    "productName": "Highlight AI",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    }
+  }
+}

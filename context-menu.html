@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AI Actions</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px;
+      font-weight: 600;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+      overflow-y: auto;
+    }
+
+    .input-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-text {
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      min-height: 80px;
+      max-height: 120px;
+      overflow-y: auto;
+      resize: none;
+      font-family: inherit;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .context-input {
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 12px;
+      font-family: inherit;
+      resize: none;
+      min-height: 40px;
+      max-height: 60px;
+    }
+
+    .action-btn {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .action-btn:hover {
+      background: #f8f8f8;
+      border-color: #667eea;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    .action-btn:active {
+      transform: translateY(0);
+    }
+
+    .action-btn.primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+
+    .action-btn.primary:hover {
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .rewrite-options {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .rewrite-btn {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .rewrite-btn:hover {
+      background: #f0f0f0;
+      border-color: #667eea;
+    }
+
+    .rewrite-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .output-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .output-text {
+      background: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      flex: 1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 150px;
+    }
+
+    .output-text.loading {
+      color: #999;
+      font-style: italic;
+    }
+
+    .output-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-secondary {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: #f8f8f8;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      color: white;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    AI Actions
+    <button class="close-btn" onclick="closeWindow()">×</button>
+  </div>
+  
+  <div class="content">
+    <div class="input-section">
+      <div class="input-label">Selected Text</div>
+      <textarea id="inputText" class="input-text"></textarea>
+    </div>
+
+    <div class="actions-row">
+      <button class="action-btn primary" onclick="replyEmail()">📧 Reply/Draft Email</button>
+      <button class="action-btn" onclick="translateToEnglish()">🌐 Translate to English</button>
+    </div>
+
+    <div class="actions-row">
+      <button class="action-btn" onclick="answerQuestion()">❓ Answer Question</button>
+      <button class="action-btn" onclick="summarizeText()">📝 Summarize</button>
+    </div>
+
+    <div class="input-section">
+      <div class="input-label">Rewrite Style</div>
+      <div class="rewrite-options">
+        <button class="rewrite-btn active" onclick="rewrite('formal')">Formal</button>
+        <button class="rewrite-btn" onclick="rewrite('casual')">Casual</button>
+        <button class="rewrite-btn" onclick="rewrite('shorter')">Shorter</button>
+        <button class="rewrite-btn" onclick="rewrite('longer')">Longer</button>
+      </div>
+    </div>
+
+    <div class="input-section">
+      <div class="input-label">Email Context (Optional)</div>
+      <textarea id="emailContext" class="context-input" placeholder="Add context or subject for email reply..."></textarea>
+    </div>
+
+    <div class="output-section">
+      <div class="input-label">AI Response</div>
+      <div id="outputText" class="output-text">Select an action above...</div>
+      <div class="output-actions">
+        <button class="btn-secondary" onclick="copyOutput()">Copy</button>
+        <button class="btn-secondary" onclick="clearOutput()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    let selectedText = '';
+    let currentRewriteStyle = 'formal';
+
+    // Receive selected text from main process
+    ipcRenderer.on('selected-text', (event, text) => {
+      selectedText = text;
+      document.getElementById('inputText').value = text;
+    });
+
+    // Update selectedText when user edits the input
+    document.getElementById('inputText').addEventListener('input', (e) => {
+      selectedText = e.target.value;
+    });
+
+    function updateRewriteButtons(activeStyle) {
+      document.querySelectorAll('.rewrite-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase() === activeStyle) {
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    async function callLMAPI(prompt, actionName) {
+      const outputEl = document.getElementById('outputText');
+      outputEl.textContent = 'Thinking...';
+      outputEl.classList.add('loading');
+
+      try {
+        const result = await ipcRenderer.invoke('call-lm-api', {
+          prompt: prompt,
+          action: actionName
+        });
+
+        if (result.success) {
+          outputEl.textContent = result.text;
+          outputEl.classList.remove('loading');
+          // Auto-copy AI response to clipboard
+          navigator.clipboard.writeText(result.text).catch(err => {
+            console.error('Auto-copy failed:', err);
+          });
+        } else {
+          outputEl.textContent = `Error: ${result.error}`;
+          outputEl.classList.remove('loading');
+        }
+      } catch (error) {
+        outputEl.textContent = `Error: ${error.message}`;
+        outputEl.classList.remove('loading');
+      }
+    }
+
+    function replyEmail() {
+      const emailContext = document.getElementById('emailContext').value.trim();
+      let contextPart = '';
+      
+      if (emailContext) {
+        contextPart = `\n\nAdditional context or subject:\n"""
+${emailContext}
+"""`;
+      }
+
+      const prompt = `You are an assistant that writes polite, concise email replies.
+
+Original email:
+"""
+${selectedText}
+"""${contextPart}
+
+Please write a professional, friendly reply email".`;
+      
+      callLMAPI(prompt, 'reply-email');
+    }
+
+    function answerQuestion() {
+      const prompt = `The user selected this text:
+
+"""
+${selectedText}
+"""
+
+If this is a question, answer it clearly and directly.
+If it is not a question, explain or summarize it.`;
+      
+      callLMAPI(prompt, 'answer-question');
+    }
+
+    function summarizeText() {
+      const prompt = `Please provide a concise summary of the following text:
+
+"""
+${selectedText}
+"""
+
+Summarize the key points and main ideas in a clear, concise manner.`;
+      
+      callLMAPI(prompt, 'summarize');
+    }
+
+    function translateToEnglish() {
+      const prompt = `Translate the following text to English. Preserve the meaning, tone, and style as much as possible:
+
+"""
+${selectedText}
+"""
+
+Provide only the English translation without additional commentary.`;
+      
+      callLMAPI(prompt, 'translate-english');
+    }
+
+    function rewrite(style) {
+      currentRewriteStyle = style;
+      updateRewriteButtons(style);
+
+      const instructions = {
+        formal: 'Rewrite the text in a more formal, professional tone.',
+        casual: 'Rewrite the text in a more casual, friendly tone.',
+        shorter: 'Rewrite the text to be shorter and more concise, preserving key meaning.',
+        longer: 'Rewrite the text to be more detailed and elaborate, but still clear.'
+      };
+
+      const prompt = `Original text:
+"""
+${selectedText}
+"""
+
+${instructions[style]}`;
+
+      callLMAPI(prompt, `rewrite-${style}`);
+    }
+
+    function copyOutput(event) {
+      const outputText = document.getElementById('outputText').textContent;
+      if (outputText && outputText !== 'Select an action above...' && !outputText.startsWith('Thinking') && !outputText.startsWith('Error:')) {
+        navigator.clipboard.writeText(outputText).then(() => {
+          const btn = event ? event.target : document.querySelector('.btn-secondary');
+          const originalText = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = originalText;
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = outputText;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            const btn = event ? event.target : document.querySelector('.btn-secondary');
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => {
+              btn.textContent = originalText;
+            }, 2000);
+          } catch (err) {
+            console.error('Fallback copy failed:', err);
+          }
+          document.body.removeChild(textArea);
+        });
+      }
+    }
+
+    function clearOutput() {
+      document.getElementById('outputText').textContent = 'Select an action above...';
+    }
+
+    function closeWindow() {
+      ipcRenderer.send('close-context-menu');
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeWindow();
+      }
+    });
+  </script>
+</body>
+</html>
+
