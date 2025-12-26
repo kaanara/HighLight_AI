@@ -1,18 +1,19 @@
 const { app, BrowserWindow, globalShortcut, Menu, Tray, ipcMain, nativeImage } = require('electron');
 const path = require('path');
+const { exec } = require('child_process');
+const { promisify } = require('util');
 const { getSelectedText } = require('./src/selection');
 const { LMClient } = require('./src/lm-client');
+const { loadConfig, saveConfig } = require('./src/config-manager');
+
+const execAsync = promisify(exec);
 
 let mainWindow = null;
 let contextMenuWindow = null;
+let settingsWindow = null;
 let tray = null;
 let lmClient = null;
-
-// LM Studio configuration
-const LM_CONFIG = {
-  baseURL: 'http://localhost:1234/v1',
-  modelName: 'qwen/qwen3-4b-2507' // Update this to match your LM Studio model
-};
+let currentConfig = null;
 
 function createMainWindow() {
   // Main window is hidden - we use it for background processing
@@ -101,6 +102,30 @@ function createContextMenuWindow(selectedText, mousePos) {
   });
 }
 
+function createSettingsWindow() {
+  // Close existing settings window if open
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 650,
+    height: 600,
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  settingsWindow.loadFile('settings.html');
+
+  settingsWindow.on('closed', () => {
+    settingsWindow = null;
+  });
+}
+
 function createTray() {
   const icon = nativeImage.createEmpty();
   tray = new Tray(icon);
@@ -115,7 +140,7 @@ function createTray() {
     {
       label: 'Settings',
       click: () => {
-        // TODO: Open settings window
+        createSettingsWindow();
       }
     },
     { type: 'separator' },
@@ -196,9 +221,134 @@ async function showContextMenu() {
   }
 }
 
+// Initialize LM Client with config
+function initializeLMClient() {
+  currentConfig = loadConfig();
+  lmClient = new LMClient(currentConfig);
+  console.log('LM Client initialized with config:', currentConfig);
+}
+
+// LM Studio CLI functions
+async function installLMStudioCLI() {
+  try {
+    // Check if Python/pip is available
+    try {
+      await execAsync('python3 --version');
+    } catch (e) {
+      throw new Error('Python 3 is not installed. Please install Python 3 first.');
+    }
+
+    // Install lmstudio package
+    const { stdout, stderr } = await execAsync('pip3 install lmstudio');
+    console.log('LM Studio CLI installation output:', stdout);
+    
+    if (stderr && !stderr.includes('Successfully installed')) {
+      // Check if it's already installed
+      if (stderr.includes('already satisfied')) {
+        return { success: true, message: 'LM Studio CLI is already installed' };
+      }
+      throw new Error(stderr);
+    }
+    
+    return { success: true, message: 'LM Studio CLI installed successfully' };
+  } catch (error) {
+    console.error('Error installing LM Studio CLI:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function downloadModel(modelName) {
+  try {
+    // Check if lms command is available
+    try {
+      await execAsync('lms --version');
+    } catch (e) {
+      return { 
+        success: false, 
+        error: 'LM Studio CLI not found. Please install it first using "Install LM Studio CLI" button.' 
+      };
+    }
+
+    // Download the model
+    console.log(`Downloading model: ${modelName}`);
+    const { stdout, stderr } = await execAsync(`lms get ${modelName}`, {
+      timeout: 600000 // 10 minutes timeout for large downloads
+    });
+    
+    console.log('Model download output:', stdout);
+    
+    if (stderr && stderr.toLowerCase().includes('error')) {
+      throw new Error(stderr);
+    }
+    
+    return { success: true, message: `Model ${modelName} downloaded successfully` };
+  } catch (error) {
+    console.error('Error downloading model:', error);
+    if (error.code === 'ETIMEDOUT') {
+      return { success: false, error: 'Download timed out. The model may be very large. Please try downloading manually in LM Studio.' };
+    }
+    return { success: false, error: error.message };
+  }
+}
+
+async function openLMStudio() {
+  try {
+    // Try to open LM Studio app on macOS
+    // Common locations for LM Studio
+    const possiblePaths = [
+      '/Applications/LM Studio.app',
+      path.join(process.env.HOME, 'Applications/LM Studio.app'),
+      '/Applications/LMStudio.app',
+      path.join(process.env.HOME, 'Applications/LMStudio.app')
+    ];
+
+    let found = false;
+    for (const appPath of possiblePaths) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(appPath)) {
+          await execAsync(`open "${appPath}"`);
+          found = true;
+          break;
+        }
+      } catch (e) {
+        // Continue to next path
+      }
+    }
+
+    if (!found) {
+      // Try using 'open' command with the app name
+      try {
+        await execAsync('open -a "LM Studio"');
+        found = true;
+      } catch (e) {
+        // Try alternative name
+        try {
+          await execAsync('open -a "LMStudio"');
+          found = true;
+        } catch (e2) {
+          // Not found
+        }
+      }
+    }
+
+    if (!found) {
+      return { 
+        success: false, 
+        error: 'LM Studio not found. Please install LM Studio from https://lmstudio.ai/' 
+      };
+    }
+
+    return { success: true, message: 'LM Studio opened successfully' };
+  } catch (error) {
+    console.error('Error opening LM Studio:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 app.whenReady().then(() => {
-  // Initialize LM Client
-  lmClient = new LMClient(LM_CONFIG);
+  // Load config and initialize LM Client
+  initializeLMClient();
 
   createMainWindow();
   createTray();
@@ -231,6 +381,43 @@ app.whenReady().then(() => {
       contextMenuWindow.close();
       contextMenuWindow = null;
     }
+  });
+
+  // Config management IPC handlers
+  ipcMain.handle('get-config', async () => {
+    return loadConfig();
+  });
+
+  ipcMain.handle('save-config', async (event, config) => {
+    try {
+      const savedConfig = saveConfig(config);
+      currentConfig = savedConfig;
+      return { success: true, config: savedConfig };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('reload-lm-client', async () => {
+    try {
+      initializeLMClient();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // LM Studio IPC handlers
+  ipcMain.handle('install-lmstudio', async () => {
+    return await installLMStudioCLI();
+  });
+
+  ipcMain.handle('download-model', async (event, modelName) => {
+    return await downloadModel(modelName);
+  });
+
+  ipcMain.handle('open-lmstudio', async () => {
+    return await openLMStudio();
   });
 });
 
