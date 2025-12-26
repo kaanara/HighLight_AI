@@ -241,16 +241,36 @@ async function installLMStudioCLI() {
     // Install lmstudio package
     const { stdout, stderr } = await execAsync('pip3 install lmstudio');
     console.log('LM Studio CLI installation output:', stdout);
-    
-    if (stderr && !stderr.includes('Successfully installed')) {
-      // Check if it's already installed
-      if (stderr.includes('already satisfied')) {
-        return { success: true, message: 'LM Studio CLI is already installed' };
-      }
-      throw new Error(stderr);
+    if (stderr) {
+      console.log('LM Studio CLI installation stderr:', stderr);
     }
     
-    return { success: true, message: 'LM Studio CLI installed successfully' };
+    // Pip outputs success messages to stdout, not stderr
+    // Check stdout for success indicators
+    const output = stdout || '';
+    const errorOutput = stderr || '';
+    
+    // Check if installation was successful
+    if (output.includes('Successfully installed') || output.includes('Requirement already satisfied')) {
+      return { success: true, message: 'LM Studio CLI installed successfully' };
+    }
+    
+    // Check if it's already installed (also in stdout)
+    if (output.includes('already satisfied')) {
+      return { success: true, message: 'LM Studio CLI is already installed' };
+    }
+    
+    // If we have stderr with actual errors (not just warnings), treat as failure
+    // Pip often outputs warnings to stderr even on success, so we check for actual error patterns
+    if (errorOutput && (errorOutput.toLowerCase().includes('error:') || 
+        errorOutput.toLowerCase().includes('failed') ||
+        errorOutput.toLowerCase().includes('cannot'))) {
+      throw new Error(errorOutput);
+    }
+    
+    // If we got here and there's no clear success, but also no clear error, assume success
+    // (pip might have installed silently or output format changed)
+    return { success: true, message: 'LM Studio CLI installation completed' };
   } catch (error) {
     console.error('Error installing LM Studio CLI:', error);
     return { success: false, error: error.message };

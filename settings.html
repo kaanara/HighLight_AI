@@ -200,7 +200,7 @@
 
         <div class="button-group">
           <button class="btn-primary" onclick="saveConfig()">Save Configuration</button>
-          <button class="btn-secondary" onclick="loadConfig()">Reset to Defaults</button>
+          <button class="btn-secondary" onclick="resetToDefaults()">Reset to Defaults</button>
         </div>
 
         <div id="configStatus" class="status-message"></div>
@@ -213,8 +213,8 @@
         </div>
         
         <div class="lm-studio-actions">
-          <button class="btn-lm" onclick="installLMStudio()">Install LM Studio CLI</button>
-          <button class="btn-lm" onclick="downloadModel()">Download Model (qwen/qwen3-4b-2507)</button>
+          <button class="btn-lm" onclick="installLMStudio(event)">Install LM Studio CLI</button>
+          <button class="btn-lm" onclick="downloadModel(event)">Download Model (qwen/qwen3-4b-2507)</button>
           <button class="btn-lm" onclick="openLMStudio()">Open LM Studio</button>
         </div>
 
@@ -241,6 +241,30 @@
       }
     }
 
+    async function resetToDefaults() {
+      try {
+        // Reset to hardcoded default values
+        const defaultConfig = {
+          baseURL: 'http://localhost:1234/v1',
+          modelName: 'qwen/qwen3-4b-2507'
+        };
+        
+        // Update UI fields
+        document.getElementById('baseURL').value = defaultConfig.baseURL;
+        document.getElementById('modelName').value = defaultConfig.modelName;
+        
+        // Save defaults to disk
+        await ipcRenderer.invoke('save-config', defaultConfig);
+        
+        // Reload LM client with default config
+        await ipcRenderer.invoke('reload-lm-client');
+        
+        showStatus('configStatus', 'Configuration reset to defaults successfully!', 'success');
+      } catch (error) {
+        showStatus('configStatus', `Error resetting to defaults: ${error.message}`, 'error');
+      }
+    }
+
     async function saveConfig() {
       const baseURL = document.getElementById('baseURL').value.trim();
       const modelName = document.getElementById('modelName').value.trim();
@@ -261,8 +285,11 @@
       }
     }
 
-    async function installLMStudio() {
-      const btn = event.target;
+    async function installLMStudio(event) {
+      const btn = (event && event.target) ? event.target : 
+        Array.from(document.querySelectorAll('.btn-lm')).find(b => b.textContent.includes('Install LM Studio CLI'));
+      if (!btn) return;
+      
       btn.classList.add('loading');
       btn.textContent = 'Installing...';
       
@@ -283,8 +310,11 @@
       }
     }
 
-    async function downloadModel() {
-      const btn = event.target;
+    async function downloadModel(event) {
+      const btn = (event && event.target) ? event.target : 
+        Array.from(document.querySelectorAll('.btn-lm')).find(b => b.textContent.includes('Download Model'));
+      if (!btn) return;
+      
       btn.classList.add('loading');
       btn.textContent = 'Downloading...';
       
