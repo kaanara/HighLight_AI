@@ -1,6 +1,6 @@
 const { app, BrowserWindow, globalShortcut, Menu, Tray, ipcMain, nativeImage } = require('electron');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const { getSelectedText } = require('./src/selection');
 const { LMClient } = require('./src/lm-client');
@@ -279,6 +279,25 @@ async function installLMStudioCLI() {
 
 async function downloadModel(modelName) {
   try {
+    // Validate model name to prevent command injection
+    // Model names should only contain: alphanumeric, slashes, hyphens, underscores, dots
+    // Pattern: org/model-name or model-name (e.g., "qwen/qwen3-4b-2507")
+    const modelNamePattern = /^[a-zA-Z0-9._/-]+$/;
+    if (!modelName || !modelNamePattern.test(modelName)) {
+      return {
+        success: false,
+        error: 'Invalid model name format. Model names can only contain letters, numbers, slashes, hyphens, underscores, and dots.'
+      };
+    }
+
+    // Additional length check to prevent extremely long inputs
+    if (modelName.length > 200) {
+      return {
+        success: false,
+        error: 'Model name is too long. Maximum length is 200 characters.'
+      };
+    }
+
     // Check if lms command is available
     try {
       await execAsync('lms --version');
@@ -289,24 +308,62 @@ async function downloadModel(modelName) {
       };
     }
 
-    // Download the model
+    // Download the model - use spawn with arguments array to prevent command injection
+    // This completely avoids shell interpretation
     console.log(`Downloading model: ${modelName}`);
-    const { stdout, stderr } = await execAsync(`lms get ${modelName}`, {
-      timeout: 600000 // 10 minutes timeout for large downloads
+    
+    return new Promise((resolve) => {
+      const child = spawn('lms', ['get', modelName]);
+      
+      let stdout = '';
+      let stderr = '';
+      
+      // Set timeout manually since spawn doesn't support timeout option
+      const timeout = setTimeout(() => {
+        child.kill();
+        resolve({ 
+          success: false, 
+          error: 'Download timed out. The model may be very large. Please try downloading manually in LM Studio.' 
+        });
+      }, 600000); // 10 minutes
+      
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      child.on('close', (code) => {
+        clearTimeout(timeout);
+        console.log('Model download output:', stdout);
+        if (stderr) {
+          console.log('Model download stderr:', stderr);
+        }
+        
+        // Exit code 0 is the authoritative success indicator
+        if (code === 0) {
+          resolve({ success: true, message: `Model ${modelName} downloaded successfully` });
+          return;
+        }
+        
+        // Non-zero exit code indicates failure
+        // Use stderr if available, otherwise provide generic error
+        const errorMessage = stderr && stderr.trim() 
+          ? stderr 
+          : `Command exited with code ${code}`;
+        resolve({ success: false, error: errorMessage });
+      });
+      
+      child.on('error', (error) => {
+        clearTimeout(timeout);
+        console.error('Error downloading model:', error);
+        resolve({ success: false, error: error.message });
+      });
     });
-    
-    console.log('Model download output:', stdout);
-    
-    if (stderr && stderr.toLowerCase().includes('error')) {
-      throw new Error(stderr);
-    }
-    
-    return { success: true, message: `Model ${modelName} downloaded successfully` };
   } catch (error) {
     console.error('Error downloading model:', error);
-    if (error.code === 'ETIMEDOUT') {
-      return { success: false, error: 'Download timed out. The model may be very large. Please try downloading manually in LM Studio.' };
-    }
     return { success: false, error: error.message };
   }
 }
